@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gastos Campo</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gastos Campo">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#2C6A42">
+<style>
+:root{
+  --bg:#F4F7F3; --surface:#FFFFFF; --fg:#18241C; --muted:#5B6B61; --line:#D9E1DA;
+  --accent:#2C6A42; --accent-fg:#FFFFFF; --accent-soft:#E3EFE6; --danger:#B3382C;
+  --font:-apple-system,"SF Pro Text","Avenir Next","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0E1510; --surface:#16201A; --fg:#E7EEE8; --muted:#95A59A; --line:#2A372D;
+    --accent:#7CC48F; --accent-fg:#0E1510; --accent-soft:#1E2E23; --danger:#F08A7E; color-scheme:dark}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.4;
+  padding-inline:16px;padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:140px}
+.wrap{max-width:560px;margin-inline:auto;display:flex;flex-direction:column;gap:24px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.eyebrow{margin:0;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.total-label{margin:10px 0 0;color:var(--muted)}
+.total{margin:0;font-weight:700;font-size:clamp(40px,12vw,56px);line-height:1.05;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.meta{margin:4px 0 0;color:var(--muted);font-size:14px}
+.notice{background:var(--accent-soft);border-radius:10px;padding:12px 14px;font-size:14px}
+h2{margin:0 0 10px;font-size:18px;font-weight:650}
+.cats{display:flex;flex-direction:column;gap:6px}
+.cat{display:grid;grid-template-columns:1fr auto;gap:2px 12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+.cat[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cat .name{font-weight:500;min-width:0;overflow-wrap:anywhere}
+.cat .amt{font-variant-numeric:tabular-nums;font-weight:600}
+.cat .track{grid-column:1 / -1;height:6px;border-radius:3px;background:var(--accent-soft);overflow:hidden;margin-top:6px;display:block}
+.cat .fill{display:block;height:100%;background:var(--accent);border-radius:3px}
+.cat .pct{grid-column:1 / -1;font-size:12px;color:var(--muted)}
+.clear{background:none;border:0;color:var(--accent);font-weight:600;padding:6px 0;text-align:left}
+.list{display:flex;flex-direction:column;gap:8px}
+.row{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;width:100%}
+.thumb{width:56px;height:56px;border-radius:8px;background:var(--accent-soft);overflow:hidden;display:grid;place-items:center;color:var(--muted);font-size:11px;text-align:center}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.row .t{display:block;font-weight:600;overflow-wrap:anywhere}
+.row .s{display:block;font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.row .m{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:24px 18px;text-align:center;display:flex;flex-direction:column;gap:6px}
+.empty strong{font-size:18px}
+.empty span{color:var(--muted);font-size:15px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px));z-index:5}
+.bar .in{max-width:560px;margin-inline:auto;display:flex;gap:10px}
+.btn{border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:14px 16px;font-weight:600;min-height:50px}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn:disabled{opacity:.55;cursor:default}
+.bar .primary{flex:1}
+.overlay{position:fixed;inset:0;background:var(--bg);overflow-y:auto;z-index:10;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.overlay[hidden],[hidden]{display:none!important}
+.sheet{max-width:560px;margin-inline:auto;display:flex;flex-direction:column;gap:16px}
+.sheet h1{margin:0;font-size:24px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:14px;font-weight:600}
+.field input,.field select,.field textarea{font:inherit;font-size:16px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:48px}
+.field textarea{min-height:76px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:380px){.grid2{grid-template-columns:1fr}}
+.photo{border:1px dashed var(--line);border-radius:14px;background:var(--surface);min-height:140px;display:grid;place-items:center;overflow:hidden}
+.photo img{max-width:100%;max-height:50vh;object-fit:contain;display:block}
+.photo-empty{color:var(--muted);padding:24px;text-align:center}
+.photo-actions{display:flex;flex-wrap:wrap;gap:10px}
+.photo-actions .btn{flex:1 1 150px}
+.link{background:none;border:0;color:var(--danger);font-weight:600;padding:8px 0}
+.err{color:var(--danger);font-size:14px;margin:0}
+.actions{display:flex;gap:10px}
+.actions .primary{flex:1}
+.detail-photo{border-radius:14px;overflow:hidden;background:var(--surface);border:1px solid var(--line);display:grid;place-items:center}
+.detail-photo img{max-width:100%;max-height:60vh;object-fit:contain;display:block}
+dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px}
+dt{color:var(--muted);font-size:14px}
+dd{margin:0;overflow-wrap:anywhere}
+.big{font-weight:700;font-size:32px;font-variant-numeric:tabular-nums;margin:0}
+@media (prefers-reduced-motion:no-preference){.btn{transition:transform .08s}.btn:active{transform:scale(.98)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Casa de campo</p>
+    <p class="total-label">Invertido hasta hoy</p>
+    <p class="total" id="total">$0.00</p>
+    <p class="meta" id="meta"></p>
+  </header>
+  <div id="notice" class="notice" hidden></div>
+  <section aria-labelledby="hc"><h2 id="hc">Por categoría</h2><div class="cats" id="cats"></div><button class="clear" id="clear" hidden>Mostrar todas las categorías</button></section>
+  <section aria-labelledby="hl"><h2 id="hl">Gastos</h2><div class="list" id="list"></div></section>
+</div>
+
+<div class="bar"><div class="in">
+  <button class="btn primary" id="add">+ Agregar gasto</button>
+  <button class="btn" id="export">Exportar</button>
+</div></div>
+
+<div class="overlay" id="formView" hidden>
+  <form class="sheet" id="form" novalidate>
+    <h1 id="formTitle">Nuevo gasto</h1>
+    <div class="photo"><img id="photoPrev" alt="Vista previa del recibo" hidden><div class="photo-empty" id="photoEmpty">Aún no hay foto del recibo</div></div>
+    <div class="photo-actions">
+      <button type="button" class="btn primary" id="pick">Elegir foto del carrete</button>
+      <button type="button" class="btn" id="take">Tomar foto aquí</button>
+      <button type="button" class="btn" id="keep" hidden>Guardar copia en Fotos</button>
+      <button type="button" class="link" id="drop" hidden>Quitar foto</button>
+    </div>
+    <p class="meta" id="photoHint">Tip: toma la foto con la cámara normal del iPhone (queda en tu carrete) y aquí elígela. La app guarda su propia copia.</p>
+    <input type="file" id="fileCam" accept="image/*" capture="environment" hidden>
+    <input type="file" id="filePick" accept="image/*" hidden>
+    <div class="grid2">
+      <div class="field"><label for="fMonto">Monto (MXN)</label><input id="fMonto" inputmode="decimal" autocomplete="off" placeholder="0.00"></div>
+      <div class="field"><label for="fFecha">Fecha</label><input id="fFecha" type="date"></div>
+    </div>
+    <div class="field"><label for="fCat">Categoría</label><select id="fCat"></select></div>
+    <div class="field"><label for="fConcepto">Concepto</label><input id="fConcepto" autocomplete="off" placeholder="Ej. Herbicida 4 L"></div>
+    <div class="grid2">
+      <div class="field"><label for="fProv">Pagado a</label><input id="fProv" autocomplete="off" placeholder="Proveedor o persona"></div>
+      <div class="field"><label for="fForma">Forma de pago</label><select id="fForma"></select></div>
+    </div>
+    <div class="field"><label for="fNotas">Notas</label><textarea id="fNotas"></textarea></div>
+    <p class="err" id="formErr" role="alert" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn" id="cancel">Cancelar</button>
+      <button type="submit" class="btn primary" id="save">Guardar</button>
+    </div>
+  </form>
+</div>
+
+<div class="overlay" id="detailView" hidden>
+  <div class="sheet" id="detail"></div>
+</div>
+
+<script>
+(function(){
+  var CATS=["Sueldos / mano de obra","Herramientas y equipo","Herbicida / insecticida / fertilizante","Materiales de construcción","Plantas y jardinería","Servicios (agua, luz, etc.)","Transporte / fletes","Otros"];
+  var FORMAS=["Efectivo","Transferencia","Tarjeta","Otro"];
+  var MONEY=new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"});
+  var rows=[], filter=null, editing=null, pending=null, saving=false, current=null, confirmDelete=false, urls=[];
+  var $=function(id){return document.getElementById(id)};
+
+  /* ---------- IndexedDB ---------- */
+  var DBN="gastos-campo", STORE="gastos", dbp=null;
+  function openDb(){return new Promise(function(res,rej){
+    var r=indexedDB.open(DBN,1);
+    r.onupgradeneeded=function(){r.result.createObjectStore(STORE,{keyPath:"id",autoIncrement:true})};
+    r.onsuccess=function(){res(r.result)}; r.onerror=function(){rej(r.error)};
+  })}
+  function getDb(){return dbp||(dbp=openDb())}
+  function tx(mode,fn){return getDb().then(function(db){return new Promise(function(res,rej){
+    var t=db.transaction(STORE,mode), s=t.objectStore(STORE), req=fn(s);
+    t.oncomplete=function(){res(req&&req.result)}; t.onerror=function(){rej(t.error)}; t.onabort=function(){rej(t.error)};
+  })})}
+  function dbAll(){return tx("readonly",function(s){return s.getAll()})}
+  function dbPut(rec){return tx("readwrite",function(s){return s.put(rec)})}
+  function dbDel(id){return tx("readwrite",function(s){return s.delete(id)})}
+  function reload(){return dbAll().then(function(r){rows=r||[];render()})}
+
+  /* ---------- Utilidades ---------- */
+  function h(tag,props){
+    var e=document.createElement(tag), p=props||{};
+    Object.keys(p).forEach(function(k){
+      var v=p[k];
+      if(k==="class")e.className=v;
+      else if(k.indexOf("on")===0)e.addEventListener(k.slice(2),v);
+      else if(v===true)e.setAttribute(k,"");
+      else if(v!==false&&v!=null)e.setAttribute(k,v);
+    });
+    for(var i=2;i<arguments.length;i++){
+      [].concat(arguments[i]).forEach(function(c){ if(c==null||c===false)return; e.append(c.nodeType?c:document.createTextNode(String(c))); });
+    }
+    return e;
+  }
+  function fmtDate(s){var m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(s||"");return m?m[3]+"/"+m[2]+"/"+m[1]:(s||"")}
+  function today(){var d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+  function show(el,on){el.hidden=!on}
+  function notice(msg){var n=$("notice");n.textContent=msg||"";show(n,!!msg)}
+  function objUrl(blob){var u=URL.createObjectURL(blob);urls.push(u);return u}
+  function freeUrls(){urls.forEach(function(u){URL.revokeObjectURL(u)});urls=[]}
+
+  /* ---------- Render ---------- */
+  function sorted(){
+    return rows.slice().sort(function(a,b){
+      if((a.fecha||"")!==(b.fecha||""))return (a.fecha||"")<(b.fecha||"")?1:-1;
+      return (b.id||0)-(a.id||0);
+    });
+  }
+  function render(){
+    freeUrls();
+    var total=rows.reduce(function(s,r){return s+(Number(r.monto)||0)},0);
+    $("total").textContent=MONEY.format(total);
+    $("meta").textContent=rows.length===0?"Sin gastos registrados":rows.length+(rows.length===1?" gasto registrado":" gastos registrados");
+
+    var cats=$("cats"); cats.replaceChildren();
+    var sums={}; rows.forEach(function(r){var c=r.categoria||"Otros";sums[c]=(sums[c]||0)+(Number(r.monto)||0)});
+    Object.keys(sums).sort(function(a,b){return sums[b]-sums[a]}).forEach(function(c){
+      var pct=total>0?sums[c]/total*100:0;
+      cats.append(h("button",{class:"cat","aria-pressed":filter===c?"true":"false",onclick:function(){filter=(filter===c?null:c);render()}},
+        h("span",{class:"name"},c),h("span",{class:"amt"},MONEY.format(sums[c])),
+        h("span",{class:"track"},h("span",{class:"fill",style:"width:"+pct.toFixed(1)+"%"})),
+        h("span",{class:"pct"},pct.toFixed(0)+"% del total")));
+    });
+    if(!rows.length) cats.append(h("p",{class:"meta"},"Aquí verás cuánto llevas en sueldos, herramientas, herbicida y lo demás."));
+    show($("clear"),!!filter);
+
+    var list=$("list"); list.replaceChildren();
+    if(!rows.length){
+      list.append(h("div",{class:"empty"},h("strong",{},"Todavía no hay gastos"),h("span",{},"Toca “Agregar gasto”, toma la foto del recibo y captura el monto. El número del gasto se asigna solo.")));
+      return;
+    }
+    sorted().filter(function(r){return !filter||(r.categoria||"Otros")===filter}).forEach(function(r){
+      var thumb=h("span",{class:"thumb"},"Sin foto");
+      if(r.foto){thumb.textContent="";thumb.append(h("img",{src:objUrl(r.foto),alt:"Recibo"}))}
+      list.append(h("button",{class:"row",onclick:function(){openDetail(r.id)}},
+        thumb,
+        h("span",{},h("span",{class:"t"},r.concepto||r.categoria||"Gasto"),
+          h("span",{class:"s"},"Nº "+r.id+" · "+fmtDate(r.fecha)+" · "+(r.categoria||"Otros"))),
+        h("span",{class:"m"},MONEY.format(Number(r.monto)||0))));
+    });
+  }
+
+  /* ---------- Detalle ---------- */
+  var detailUrl=null;
+  function openDetail(id){
+    var r=rows.filter(function(x){return x.id===id})[0]; if(!r)return;
+    current=r; confirmDelete=false; drawDetail(); show($("detailView"),true); $("detailView").scrollTop=0;
+  }
+  function closeDetail(){show($("detailView"),false);current=null;if(detailUrl){URL.revokeObjectURL(detailUrl);detailUrl=null}}
+  function drawDetail(){
+    var r=current, box=$("detail"); box.replaceChildren();
+    if(detailUrl){URL.revokeObjectURL(detailUrl);detailUrl=null}
+    box.append(h("p",{class:"eyebrow"},"Gasto Nº "+r.id), h("p",{class:"big"},MONEY.format(Number(r.monto)||0)));
+    if(r.foto){detailUrl=URL.createObjectURL(r.foto);box.append(h("div",{class:"detail-photo"},h("img",{src:detailUrl,alt:"Foto del recibo"})))}
+    else box.append(h("div",{class:"detail-photo"},h("div",{class:"photo-empty"},"Sin foto del recibo")));
+    box.append(h("dl",{},
+      h("dt",{},"Concepto"),h("dd",{},r.concepto||"—"),
+      h("dt",{},"Categoría"),h("dd",{},r.categoria||"Otros"),
+      h("dt",{},"Fecha"),h("dd",{},fmtDate(r.fecha)),
+      h("dt",{},"Pagado a"),h("dd",{},r.pagadoA||"—"),
+      h("dt",{},"Forma de pago"),h("dd",{},r.forma||"—"),
+      h("dt",{},"Notas"),h("dd",{},r.notas||"—")));
+    box.append(h("p",{class:"err",id:"delErr",role:"alert",hidden:true}));
+    if(r.foto) box.append(h("button",{class:"btn",onclick:savePhoto},"Guardar foto en Fotos"));
+    box.append(h("div",{class:"actions"},
+      h("button",{class:"btn",onclick:closeDetail},"Cerrar"),
+      h("button",{class:"btn primary",onclick:function(){var x=current;closeDetail();openForm(x)}},"Editar")));
+    box.append(h("button",{class:"btn danger",onclick:onDelete},confirmDelete?"Toca otra vez para eliminar":"Eliminar gasto"));
+  }
+  function savePhoto(){
+    var r=current, err=$("delErr");
+    var f=new File([r.foto],"recibo-"+r.id+".jpg",{type:r.foto.type||"image/jpeg"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      navigator.share({files:[f],title:"Recibo Nº "+r.id}).catch(function(e){
+        if(e&&e.name!=="AbortError"){err.textContent="No se pudo abrir el menú de compartir.";err.hidden=false}
+      });
+    } else {err.textContent="Este navegador no puede compartir la foto.";err.hidden=false}
+  }
+  function onDelete(){
+    if(!confirmDelete){confirmDelete=true;drawDetail();return}
+    var r=current;
+    dbDel(r.id).then(function(){closeDetail();return reload()}).catch(function(){
+      var err=$("delErr");err.textContent="No se pudo eliminar. Intenta de nuevo.";err.hidden=false;confirmDelete=false;
+    });
+  }
+
+  /* ---------- Formulario ---------- */
+  function lastCat(){try{return localStorage.getItem("gcc-cat")}catch(e){return null}}
+  function rememberCat(c){try{localStorage.setItem("gcc-cat",c)}catch(e){}}
+  function fillSelect(sel,list){sel.replaceChildren();list.forEach(function(v){sel.append(h("option",{value:v},v))})}
+  function setPreview(blob){
+    var img=$("photoPrev");
+    if(pending.url){URL.revokeObjectURL(pending.url);pending.url=null}
+    if(blob){pending.url=URL.createObjectURL(blob);img.src=pending.url;show(img,true);show($("photoEmpty"),false);show($("drop"),true);show($("keep"),canShareFile());show($("photoHint"),false)}
+    else{img.removeAttribute("src");show(img,false);show($("photoEmpty"),true);show($("drop"),false);show($("keep"),false);show($("photoHint"),true)}
+  }
+  function canShareFile(){
+    try{var f=new File(["x"],"r.jpg",{type:"image/jpeg"});return !!(navigator.canShare&&navigator.canShare({files:[f]}))}catch(e){return false}
+  }
+  function keepCopy(){
+    if(!pending||!pending.blob)return;
+    var f=new File([pending.blob],"recibo-"+today()+".jpg",{type:pending.blob.type||"image/jpeg"});
+    navigator.share({files:[f],title:"Recibo"}).catch(function(e){
+      if(e&&e.name!=="AbortError"){var er=$("formErr");er.textContent="No se pudo abrir el menú de compartir.";er.hidden=false}
+    });
+  }
+  function openForm(r){
+    editing=r||null; saving=false; pending={blob:null,url:null};
+    $("formTitle").textContent=r?"Editar gasto":"Nuevo gasto";
+    $("fMonto").value=r?String(r.monto):"";
+    $("fFecha").value=r&&r.fecha?r.fecha:today();
+    var lc=lastCat();
+    $("fCat").value=r?(r.categoria||"Otros"):(CATS.indexOf(lc)>=0?lc:CATS[0]);
+    $("fConcepto").value=r?(r.concepto||""):"";
+    $("fProv").value=r?(r.pagadoA||""):"";
+    $("fForma").value=r?(r.forma||FORMAS[0]):FORMAS[0];
+    $("fNotas").value=r?(r.notas||""):"";
+    pending.blob=r&&r.foto?r.foto:null; setPreview(pending.blob);
+    $("formErr").hidden=true;$("save").disabled=false;$("save").textContent="Guardar";
+    show($("formView"),true);$("formView").scrollTop=0;
+  }
+  function closeForm(){show($("formView"),false);editing=null;if(pending&&pending.url){URL.revokeObjectURL(pending.url)}pending=null}
+
+  function shrink(file){
+    var url=URL.createObjectURL(file);
+    return new Promise(function(res){
+      var i=new Image();
+      i.onload=function(){
+        try{
+          var max=1600,s=Math.min(1,max/Math.max(i.naturalWidth,i.naturalHeight));
+          var c=document.createElement("canvas");c.width=Math.round(i.naturalWidth*s);c.height=Math.round(i.naturalHeight*s);
+          c.getContext("2d").drawImage(i,0,0,c.width,c.height);
+          c.toBlob(function(b){URL.revokeObjectURL(url);res(b||file)},"image/jpeg",0.82);
+        }catch(e){URL.revokeObjectURL(url);res(file)}
+      };
+      i.onerror=function(){URL.revokeObjectURL(url);res(file)};
+      i.src=url;
+    });
+  }
+  function onFile(ev){
+    var f=ev.target.files&&ev.target.files[0]; ev.target.value=""; if(!f)return;
+    $("formErr").hidden=true;
+    shrink(f).then(function(b){pending.blob=b;setPreview(b)});
+  }
+  function onDrop(){pending.blob=null;setPreview(null)}
+  function parseMonto(s){var n=Number(String(s).replace(/[^0-9.,-]/g,"").replace(/,/g,""));return isFinite(n)?n:NaN}
+
+  function onSave(ev){
+    ev.preventDefault(); if(saving)return;
+    var err=$("formErr"); err.hidden=true;
+    var monto=parseMonto($("fMonto").value);
+    if(!(monto>0)){err.textContent="Escribe el monto del gasto.";err.hidden=false;$("fMonto").focus();return}
+    saving=true;$("save").disabled=true;$("save").textContent="Guardando…";
+    var cat=$("fCat").value;
+    var rec={
+      fecha:$("fFecha").value||today(), categoria:cat,
+      concepto:$("fConcepto").value.trim(), pagadoA:$("fProv").value.trim(),
+      forma:$("fForma").value, notas:$("fNotas").value.trim(),
+      monto:Math.round(monto*100)/100, foto:pending.blob||null
+    };
+    if(editing)rec.id=editing.id;
+    dbPut(rec).then(function(){rememberCat(cat);closeForm();return reload()}).catch(function(){
+      err.textContent="No se pudo guardar. Revisa que tengas espacio en el iPhone e intenta de nuevo.";err.hidden=false;
+      saving=false;$("save").disabled=false;$("save").textContent="Guardar";
+    });
+  }
+
+  /* ---------- Exportar ---------- */
+  function q(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
+  function onExport(){
+    if(!rows.length){notice("Aún no hay gastos para exportar.");return}
+    notice("");
+    var lines=[["Nº","Fecha","Categoría","Concepto","Pagado a","Forma de pago","Monto (MXN)","Notas","Foto del recibo"].map(q).join(",")];
+    rows.slice().sort(function(a,b){return a.id-b.id}).forEach(function(r){
+      lines.push([r.id,fmtDate(r.fecha),r.categoria,r.concepto,r.pagadoA,r.forma].map(q).join(",")+","+(Number(r.monto)||0).toFixed(2)+","+[r.notas,r.foto?"Sí":"No"].map(q).join(","));
+    });
+    var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
+    var file=new File([blob],"gastos-casa-de-campo.csv",{type:"text/csv"});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:"Gastos casa de campo"}).catch(function(e){
+        if(e&&e.name!=="AbortError")notice("No se pudo abrir el menú de compartir.");
+      });
+    } else {
+      var u=URL.createObjectURL(blob), a=h("a",{href:u,download:file.name});
+      document.body.append(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);
+    }
+  }
+
+  /* ---------- Arranque ---------- */
+  fillSelect($("fCat"),CATS); fillSelect($("fForma"),FORMAS);
+  $("add").addEventListener("click",function(){openForm(null)});
+  $("export").addEventListener("click",onExport);
+  $("clear").addEventListener("click",function(){filter=null;render()});
+  $("cancel").addEventListener("click",closeForm);
+  $("form").addEventListener("submit",onSave);
+  $("take").addEventListener("click",function(){$("fileCam").click()});
+  $("pick").addEventListener("click",function(){$("filePick").click()});
+  $("fileCam").addEventListener("change",onFile);
+  $("filePick").addEventListener("change",onFile);
+  $("drop").addEventListener("click",onDrop);
+  $("keep").addEventListener("click",keepCopy);
+  document.addEventListener("keydown",function(e){
+    if(e.key!=="Escape")return;
+    if(!$("formView").hidden)closeForm(); else if(!$("detailView").hidden)closeDetail();
+  });
+
+  render();
+  if(!window.indexedDB){notice("Este navegador no puede guardar los gastos. Abre la página en Safari.")}
+  else reload().catch(function(){notice("No se pudieron cargar los gastos. En una pestaña privada de Safari no se pueden guardar.")});
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+  if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+})();
+</script>
+</body>
+</html>
