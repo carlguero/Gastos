@@ -104,7 +104,7 @@ dd{margin:0;overflow-wrap:anywhere}
 
 <div class="bar"><div class="in">
   <button class="btn primary" id="add">+ Agregar gasto</button>
-  <button class="btn" id="export">Exportar</button>
+  <button class="btn" id="export">Respaldo</button>
 </div></div>
 
 <div class="overlay" id="formView" hidden>
@@ -141,6 +141,26 @@ dd{margin:0;overflow-wrap:anywhere}
 
 <div class="overlay" id="detailView" hidden>
   <div class="sheet" id="detail"></div>
+</div>
+
+<div class="overlay" id="dataView" hidden>
+  <div class="sheet">
+    <h1>Respaldo</h1>
+    <p class="meta" style="margin:0">Para pasar tus gastos y fotos a otro dispositivo (por ejemplo del iPhone al iPad), exporta el respaldo completo, mándalo por AirDrop o iCloud Drive, y en el otro dispositivo toca Importar respaldo.</p>
+    <button class="btn primary" id="dBackup">Exportar respaldo completo (con fotos)</button>
+    <button class="btn" id="dCsv">Exportar lista en CSV (Numbers / Excel)</button>
+    <button class="btn" id="dImport">Importar respaldo</button>
+    <input type="file" id="fileImport" accept=".json,application/json" hidden>
+    <div class="notice" id="dataMsg" role="status" hidden></div>
+    <div id="confirmBox" class="notice" hidden>
+      <p id="confirmText" style="margin:0 0 12px"></p>
+      <div class="actions">
+        <button class="btn" id="confirmNo">Cancelar</button>
+        <button class="btn danger" id="confirmYes">Reemplazar</button>
+      </div>
+    </div>
+    <button class="btn" id="dClose">Cerrar</button>
+  </div>
 </div>
 
 <script>
@@ -358,29 +378,87 @@ dd{margin:0;overflow-wrap:anywhere}
 
   /* ---------- Exportar ---------- */
   function q(v){return '"'+String(v==null?"":v).replace(/"/g,'""')+'"'}
-  function onExport(){
-    if(!rows.length){notice("Aún no hay gastos para exportar.");return}
-    notice("");
+  function msg(t){var m=$("dataMsg");m.textContent=t||"";show(m,!!t)}
+  function shareOrDownload(file,blob,title){
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      return navigator.share({files:[file],title:title}).catch(function(e){
+        if(e&&e.name!=="AbortError")msg("No se pudo abrir el menú de compartir.");
+      });
+    }
+    var u=URL.createObjectURL(blob), a=h("a",{href:u,download:file.name});
+    document.body.append(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);
+    return Promise.resolve();
+  }
+  function blobToDataUrl(b){return new Promise(function(res,rej){var r=new FileReader();r.onload=function(){res(r.result)};r.onerror=function(){rej(r.error)};r.readAsDataURL(b)})}
+  function dataUrlToBlob(u){return fetch(u).then(function(r){return r.blob()})}
+  function exportBackup(){
+    if(!rows.length){msg("Aún no hay gastos para respaldar.");return}
+    msg("Preparando respaldo…");
+    Promise.all(rows.map(function(r){
+      return (r.foto?blobToDataUrl(r.foto):Promise.resolve(null)).then(function(f){
+        return {id:r.id,fecha:r.fecha,categoria:r.categoria,concepto:r.concepto,pagadoA:r.pagadoA,forma:r.forma,notas:r.notas,monto:r.monto,foto:f};
+      });
+    })).then(function(list){
+      var data={app:"gastos-campo",version:1,exportado:new Date().toISOString(),gastos:list};
+      var blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+      var file=new File([blob],"gastos-campo-respaldo-"+today()+".json",{type:"application/json"});
+      msg("");
+      return shareOrDownload(file,blob,"Respaldo gastos casa de campo");
+    }).catch(function(){msg("No se pudo preparar el respaldo.")});
+  }
+  var importing=null;
+  function onImportFile(ev){
+    var f=ev.target.files&&ev.target.files[0]; ev.target.value=""; if(!f)return;
+    msg("");
+    f.text().then(function(t){
+      var d=JSON.parse(t);
+      if(!d||d.app!=="gastos-campo"||!Array.isArray(d.gastos))throw new Error("formato");
+      importing=d.gastos;
+      $("confirmText").textContent="El respaldo trae "+d.gastos.length+(d.gastos.length===1?" gasto":" gastos")+". Al importarlo se reemplazan los "+rows.length+" que hay en este dispositivo.";
+      show($("confirmBox"),true);
+    }).catch(function(){importing=null;show($("confirmBox"),false);msg("Ese archivo no es un respaldo de Gastos Campo.")});
+  }
+  function doImport(){
+    var list=importing; if(!list)return;
+    show($("confirmBox"),false); msg("Importando…");
+    Promise.all(list.map(function(g,i){
+      var rec={id:Number.isInteger(g.id)&&g.id>0?g.id:i+1,fecha:String(g.fecha||today()),categoria:String(g.categoria||"Otros"),concepto:String(g.concepto||""),pagadoA:String(g.pagadoA||""),forma:String(g.forma||""),notas:String(g.notas||""),monto:Number(g.monto)||0,foto:null};
+      if(typeof g.foto==="string"&&g.foto.indexOf("data:image/")===0)return dataUrlToBlob(g.foto).then(function(b){rec.foto=b;return rec});
+      return rec;
+    })).then(function(recs){
+      return getDb().then(function(db){return new Promise(function(res,rej){
+        var t=db.transaction(STORE,"readwrite"), s=t.objectStore(STORE);
+        s.clear(); recs.forEach(function(r){s.put(r)});
+        t.oncomplete=res; t.onerror=function(){rej(t.error)}; t.onabort=function(){rej(t.error)};
+      })}).then(function(){return recs.length});
+    }).then(function(n){importing=null;return reload().then(function(){msg("Listo: "+n+(n===1?" gasto importado.":" gastos importados."))})})
+    .catch(function(){importing=null;msg("No se pudo importar. Tus gastos actuales no se tocaron.")});
+  }
+  function openData(){msg("");show($("confirmBox"),false);importing=null;show($("dataView"),true);$("dataView").scrollTop=0}
+  function closeData(){show($("dataView"),false)}
+  function exportCsv(){
+    if(!rows.length){msg("Aún no hay gastos para exportar.");return}
+    msg("");
     var lines=[["Nº","Fecha","Categoría","Concepto","Pagado a","Forma de pago","Monto (MXN)","Notas","Foto del recibo"].map(q).join(",")];
     rows.slice().sort(function(a,b){return a.id-b.id}).forEach(function(r){
       lines.push([r.id,fmtDate(r.fecha),r.categoria,r.concepto,r.pagadoA,r.forma].map(q).join(",")+","+(Number(r.monto)||0).toFixed(2)+","+[r.notas,r.foto?"Sí":"No"].map(q).join(","));
     });
     var blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv"});
     var file=new File([blob],"gastos-casa-de-campo.csv",{type:"text/csv"});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({files:[file],title:"Gastos casa de campo"}).catch(function(e){
-        if(e&&e.name!=="AbortError")notice("No se pudo abrir el menú de compartir.");
-      });
-    } else {
-      var u=URL.createObjectURL(blob), a=h("a",{href:u,download:file.name});
-      document.body.append(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u)},4000);
-    }
+    shareOrDownload(file,blob,"Gastos casa de campo");
   }
 
   /* ---------- Arranque ---------- */
   fillSelect($("fCat"),CATS); fillSelect($("fForma"),FORMAS);
   $("add").addEventListener("click",function(){openForm(null)});
-  $("export").addEventListener("click",onExport);
+  $("export").addEventListener("click",openData);
+  $("dBackup").addEventListener("click",exportBackup);
+  $("dCsv").addEventListener("click",exportCsv);
+  $("dImport").addEventListener("click",function(){$("fileImport").click()});
+  $("fileImport").addEventListener("change",onImportFile);
+  $("confirmYes").addEventListener("click",doImport);
+  $("confirmNo").addEventListener("click",function(){importing=null;show($("confirmBox"),false)});
+  $("dClose").addEventListener("click",closeData);
   $("clear").addEventListener("click",function(){filter=null;render()});
   $("cancel").addEventListener("click",closeForm);
   $("form").addEventListener("submit",onSave);
@@ -392,7 +470,7 @@ dd{margin:0;overflow-wrap:anywhere}
   $("keep").addEventListener("click",keepCopy);
   document.addEventListener("keydown",function(e){
     if(e.key!=="Escape")return;
-    if(!$("formView").hidden)closeForm(); else if(!$("detailView").hidden)closeDetail();
+    if(!$("formView").hidden)closeForm(); else if(!$("detailView").hidden)closeDetail(); else if(!$("dataView").hidden)closeData();
   });
 
   render();
